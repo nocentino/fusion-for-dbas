@@ -220,6 +220,7 @@ New-Pfa2Workload @workloadParams2
 Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"
 Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-02"
 
+# Remove workloads
 $SQLInstances = @("Production-SQL-03", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
 
 foreach ($instance in $SQLInstances) {
