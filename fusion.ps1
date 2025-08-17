@@ -4,8 +4,7 @@
 # Multiple arrays are available in the fleet - uncomment the one you want to use
 # Each array serves different purposes:
 # - X90R2 arrays: High-performance production workloads
-# - C60 arrays: Cost-effective capacity for dev/test or backup
-$ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'    # Primary production array
+$ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'    
 $Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
 $FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError
 
@@ -28,6 +27,7 @@ Get-Command -Module PureStoragePowerShellSDK2 -Noun '*Workload*'
 # Get fleet membership - shows all arrays that are part of this Fusion fleet
 # This confirms which arrays we can manage from this connection point
 $FleetInfo = Get-Pfa2FleetMember -Array $FlashArray 
+$FleetInfo | Format-List
 $FleetInfo.Member.Name 
 
 
@@ -51,13 +51,13 @@ $presetParams = @{
     # QoS Configuration: Define performance limits for the entire workload
     # This prevents a single SQL instance from consuming all array resources
     QosConfigurationsName                           = @("Sql-QoS")
-    QosConfigurationsIopsLimit                      = @("75000")  # 75K IOPS limit suitable for most SQL workloads
+    QosConfigurationsIopsLimit                      = @("75000") 
 
     # Placement Configuration: Determines which arrays/storage classes can host this workload
     PlacementConfigurationsName                     = @("Data-Placement")
     PlacementConfigurationsStorageClassName         = @("flasharray-x")  # Target high-performance X arrays
     PlacementConfigurationsStorageClassResourceType = @("storage-classes")
-    PlacementConfigurationsQosConfigurations        = @(@("Sql-QoS"))  # Link QoS to placement
+    PlacementConfigurationsQosConfigurations        = @(@("Sql-QoS"))    # Link QoS to placement
 
     # Volume Configuration: SQL Server requires different volumes for optimal performance
     VolumeConfigurationsName                        = @("SQL-Data", "SQL-Log", "SQL-TempDB", "SQL-System")
@@ -83,7 +83,7 @@ $presetParams = @{
     WorkloadTagsValue                               = @("sql-server", "enterprise-app", "production", "true")
 }
 
-Write-Host "Creating SQL Server optimized multi-disk preset..." -ForegroundColor Green
+Write-Host "Creating SQL Server optimized multi-disk preset..."
 New-Pfa2PresetWorkload @presetParams
 
 
@@ -107,16 +107,17 @@ $workloadParams1 = @{
 
 New-Pfa2Workload @workloadParams1
 
-# Verify workload creation and list all workloads using this preset
+# Verify workload creation and list all workloads using this preset, -Filter is also not available for this cmdlet
 Get-Pfa2Workload -Array $FlashArray | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-Table -AutoSize
+    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-List 
 
 # ===============================================
 # INSPECT WORKLOAD COMPONENTS
 # ===============================================
 # Each workload creates multiple objects that we can query
 
-# Get the volume group (container for all volumes in the workload)
+# Get the volume group (container for all volumes in the workload), using array-side filtering on the workload attribute
+# Notice the QoS configuration is applied here.
 Get-Pfa2VolumeGroup -Array $FlashArray -Filter "workload.name='Production-SQL-01'"
 
 
@@ -145,6 +146,10 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name
 # The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types
 $FleetMembers = Get-Pfa2FleetMember -Array $FlashArray -Filter "Member.Name!='sn1-s200-c09-33'"
 $FleetMembers.Member.Name
+
+
+# List all arrays in the fleet
+Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Format-List
 
 
 # Search the entire fleet for protection group snapshots
@@ -176,7 +181,7 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMember
 # Deploy multiple SQL Server instances using the same preset
 # This ensures consistency across all deployments
 
-$SQLInstances = @("Production-SQL-03", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
+$SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
 
 foreach ($instance in $SQLInstances) {
     $workloadParams = @{
@@ -186,7 +191,7 @@ foreach ($instance in $SQLInstances) {
     }
     
     New-Pfa2Workload @workloadParams
-    Write-Output "Created workload for $instance" -ForegroundColor Green
+    Write-Output "Created workload for $instance"
 }
 
 # List all workloads across the fleet that use our SQL Server preset
@@ -199,16 +204,20 @@ Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name |
 # Deploy a workload on a different array (if connected)
 # This demonstrates Fusion's ability to manage workloads regardless of which array you're connected to
 
-$FleetMembers.Member.Name
+
 
 $workloadParams2 = @{
-    Array       = $FlashArray
-    ContextNames = $FleetMembers.Member.Name
-    Name        = "Production-SQL-02"
-    PresetNames = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
+    Array        = $FlashArray
+    ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-33' }
+    Name         = "Production-SQL-03"
+    PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
 }
 
 New-Pfa2Workload @workloadParams2
+
+# Get all workloads using the SQL Server preset
+Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
+    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-Table -AutoSize
 
 # ===============================================
 # CLEANUP OPERATIONS
@@ -218,10 +227,19 @@ New-Pfa2Workload @workloadParams2
 
 # Remove individual workloads
 Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"
-Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-02"
+
+
+# Verify workload destruction status
+Get-Pfa2Workload -Array $PrimaryArray -Destroyed $true | 
+    Where-Object { $_.Name -eq "Production-SQL-01" } | 
+    Format-List Name, Destroyed, TimeRemaining
+
+
+# Force immediate eradication of the destroyed workload
+Remove-Pfa2Workload -Array $PrimaryArray -Name "Production-SQL-01" -Eradicate
 
 # Remove workloads
-$SQLInstances = @("Production-SQL-03", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
+$SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
 
 foreach ($instance in $SQLInstances) {
     $workloadParams = @{
@@ -230,13 +248,17 @@ foreach ($instance in $SQLInstances) {
         PresetNames = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
     }
     
-    Remove-Pfa2Workload -Array $FlashArray -Name $instance
-    Write-Output "Removed workload for $instance" -ForegroundColor Green
+    Remove-Pfa2Workload -Array $FlashArray -Name $instance 
+    Remove-Pfa2Workload -Array $FlashArray -Name $instance -Eradicate -Confirm:$false
+    Write-Output "Removed workload for $instance"
 }
+
 
 # Remove the preset (only after all workloads using it are deleted)
 Remove-Pfa2PresetWorkload -Array $FlashArray -ContextNames 'fsa-lab-fleet1' -Name "SQL-Server-MultiDisk-Optimized" 
 
+
+Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03"
 
 
 
@@ -245,13 +267,13 @@ Remove-Pfa2PresetWorkload -Array $FlashArray -ContextNames 'fsa-lab-fleet1' -Nam
 # ===============================================
 # The following topics represent advanced Fusion capabilities for future scripts:
 
-# **Cross-Array Replication**: Configuring periodic replication between arrays in your Fleet for disaster recovery and data mobility
-
 # **Using Fusion for Remote Command Execution**: Fusion allows for remote command execution across all objects in your fleet rather than just per array
 
 # **Building a Global Snapshot Catalog**: Using tags combined with Fusion's fleet-wide scope, you can find and consume a snapshot anywhere in your Fleet
 
 # **Updating Workload Presets**: How to modify existing Presets and handle versioning as your requirements evolve
+
+# **Adding resources to an existing workload**: Techniques for expanding the resource allocation of a running workload
 
 # **Finding Configuration Skew**: Use PowerShell to find configuration skew in your environment
 
