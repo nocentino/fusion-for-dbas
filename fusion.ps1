@@ -98,18 +98,21 @@ Get-Pfa2PresetWorkload -Array $FlashArray | Where-Object { $_.Name -like "fsa-la
 # Create a production SQL Server instance using our standardized preset
 # This single command creates all volumes, configures QoS, and sets up snapshots
 
+
 # Example 1: Create Production SQL Server Workload
 $workloadParams1 = @{
-    Array       = $FlashArray
+    Array       = $FlashArray # This gets deployed on the array we're currently connected to
     Name        = "Production-SQL-01"
     PresetNames = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")  # Reference the fleet-scoped preset
 }
 
 New-Pfa2Workload @workloadParams1
 
+
 # Verify workload creation and list all workloads using this preset, -Filter is also not available for this cmdlet
 Get-Pfa2Workload -Array $FlashArray | 
     Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-List 
+
 
 # ===============================================
 # INSPECT WORKLOAD COMPONENTS
@@ -203,8 +206,7 @@ Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name |
 # ===============================================
 # Deploy a workload on a different array (if connected)
 # This demonstrates Fusion's ability to manage workloads regardless of which array you're connected to
-
-
+# The scope of the preset is the whole fleet
 
 $workloadParams2 = @{
     Array        = $FlashArray
@@ -215,9 +217,20 @@ $workloadParams2 = @{
 
 New-Pfa2Workload @workloadParams2
 
+# Create another workload with the same name in a different context
+$workloadParams3 = @{
+    Array        = $FlashArray
+    ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-27' }
+    Name         = "Production-SQL-03"
+    PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
+}
+
+New-Pfa2Workload @workloadParams3
+
+
 # Get all workloads using the SQL Server preset
 Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-Table -AutoSize
+    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
 
 # ===============================================
 # CLEANUP OPERATIONS
@@ -226,7 +239,10 @@ Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name |
 # WARNING: This will delete all volumes and data associated with these workloads
 
 # Remove individual workloads
-Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"
+$ContextName = (Get-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01" -ContextNames $FleetMembers.Member.Name).Context.Name
+Write-output "Context for Production-SQL-01 is $ContextName"
+
+Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01" -ContextNames $ContextName
 
 
 # Verify workload destruction status
@@ -236,30 +252,43 @@ Get-Pfa2Workload -Array $PrimaryArray -Destroyed $true |
 
 
 # Force immediate eradication of the destroyed workload
-Remove-Pfa2Workload -Array $PrimaryArray -Name "Production-SQL-01" -Eradicate
+Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"  -ContextNames $ContextName -Eradicate
+
 
 # Remove workloads
 $SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
 
 foreach ($instance in $SQLInstances) {
+    $ContextName = (Get-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $FleetMembers.Member.Name).Context.Name
+    Write-output "Context for $instance is $ContextName"
+
     $workloadParams = @{
         Array       = $FlashArray
         Name        = $instance
-        PresetNames = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
+        ContextName = $ContextName
     }
-    
-    Remove-Pfa2Workload -Array $FlashArray -Name $instance 
-    Remove-Pfa2Workload -Array $FlashArray -Name $instance -Eradicate -Confirm:$false
+
+    Remove-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $ContextName
     Write-Output "Removed workload for $instance"
+    
+    Remove-Pfa2Workload -Array $FlashArray -Name $instance -Eradicate -Confirm:$false
+    Write-Output "Eradicated workload for $instance"
 }
 
 
-# Remove the preset (only after all workloads using it are deleted)
+# Remove the preset which you can do even with a workload deployed 
 Remove-Pfa2PresetWorkload -Array $FlashArray -ContextNames 'fsa-lab-fleet1' -Name "SQL-Server-MultiDisk-Optimized" 
 
 
-Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03"
+# Remove our last workload
+Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
+    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
 
+Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-27' -Name "Production-SQL-03" 
+Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-27' -Name "Production-SQL-03" -Eradicate -Confirm:$false
+
+Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" 
+Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" -Eradicate -Confirm:$false
 
 
 # ===============================================
