@@ -11,7 +11,7 @@ $FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -
 # ===============================================
 # DISCOVER AVAILABLE FUSION CMDLETS
 # ===============================================
-# List all Fleet-related PowerShell cmdlets available in the SDK
+# List all Fleet-related PowerShell cmdlets available in the SDK    
 # These cmdlets enable fleet-wide operations and management
 Get-Command -Module PureStoragePowerShellSDK2 -Noun '*Fleet*'
 
@@ -302,7 +302,7 @@ Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "P
 
 # **Updating Workload Presets**: How to modify existing Presets and handle versioning as your requirements evolve
 
-# **Adding resources to an existing workload**: Techniques for expanding the resource allocation of a running workload
+# **Adding resources to an existing workload**: Techniques for expanding the resource allocation of a running workload, such as adding a volume. Does it go into the PG?
 
 # **Finding Configuration Skew**: Use PowerShell to find configuration skew in your environment
 
