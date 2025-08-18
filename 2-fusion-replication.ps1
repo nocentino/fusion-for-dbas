@@ -353,3 +353,7 @@ $RemoteProtectionGroupToDelete
 Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name  -Name $LocalProtectionGroupToDelete.Name
 Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames  $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name -Eradicate -Confirm:$false
 
+
+
+#### Questions
+# 1. Does this help us with the vvol problem
