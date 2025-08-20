@@ -45,6 +45,8 @@ $remoteArray
 # - Quality of Service (QoS) limits
 # - Snapshot policies for local protection
 # - Cross-array replication for disaster recovery
+# Build one remote target as a List[string]
+
 $presetParams = @{
     Array                                           = $PrimaryArray
     ContextNames                                    = 'fsa-lab-fleet1'  # The Fusion context where this preset will be created
@@ -83,10 +85,17 @@ $presetParams = @{
 
     # Replication Configuration: Cross-array protection for disaster recovery
     PeriodicReplicationConfigurationsName           = @("CrossArray-Replication-PG")
-    PeriodicReplicationConfigurationsRemoteTargets  = @(@(@{Name='sn1-c60-e12-16'; ResourceType='remote-arrays'}))
     PeriodicReplicationConfigurationsRulesEvery     = @("600000")      # Replicate every 10 minutes
     PeriodicReplicationConfigurationsRulesKeepFor   = @("2419200000")  # Keep replicas for 28 days
-
+    PeriodicReplicationConfigurationsRemoteTargets  = $(
+        $rt = [System.Collections.Generic.List[System.Collections.Generic.List[string]]]::new()
+        $inner = [System.Collections.Generic.List[string]]::new()
+        $inner.Add("")
+        $inner.Add("sn1-c60-e12-16")
+        $inner.Add("remote-arrays")
+        $rt.Add($inner)
+        $rt
+    )
     # Apply replication to all volumes except TempDB (can be recreated in DR)
     VolumeConfigurationsPeriodicReplicationConfigurations = @(
         @("CrossArray-Replication-PG"),  # SQL-Data gets replicated
@@ -102,130 +111,6 @@ $presetParams = @{
 
 Write-Output "`nCreating cross-array replication preset..." -ForegroundColor Green
 New-Pfa2PresetWorkload @presetParams -Verbose
-
-# ===============================================
-# ALTERNATIVE: CREATE PRESET VIA REST API
-# ===============================================
-# The following section demonstrates creating the same preset using the REST API
-# This is useful when the PowerShell cmdlet doesn't support all parameters
-# or when integrating with other automation tools
-
-# Build the REST API request body with proper structure
-$restBody = @{
-    description = "SQL Server optimized preset with different volumes for Data, Log, TempDB, and System with cross-array replication"
-    workload_type = "database"
-    
-    # QoS configurations for performance management
-    qos_configurations = @(
-        @{
-            name = "Sql-QoS"
-            iops_limit = "75000"
-        }
-    )
-    
-    # Placement configurations for storage selection
-    placement_configurations = @(
-        @{
-            name = "Data-Placement"
-            qos_configurations = @("Sql-QoS")
-            storage_class = @{
-                name = "flasharray-x"
-                resource_type = "storage-classes"
-            }
-        }
-    )
-    
-    # Snapshot configurations for local protection
-    snapshot_configurations = @(
-        @{
-            name = "Data-Snapshots"
-            rules = @(
-                @{
-                    every = "600000"      # 10 minutes in milliseconds
-                    keep_for = "604800000" # 7 days in milliseconds
-                }
-            )
-        }
-    )
-    
-    # Periodic replication configurations for DR
-    periodic_replication_configurations = @(
-        @{
-            name = "CrossArray-Replication-PG"
-            remote_targets = @(
-                @{
-                    name = "sn1-c60-e12-16"
-                    resource_type = "remote-arrays"
-                }
-            )
-            rules = @(
-                @{
-                    every = "600000"       # 10 minutes in milliseconds
-                    keep_for = "2419200000" # 28 days in milliseconds
-                }
-            )
-        }
-    )
-    
-    # Volume configurations with sizes in bytes
-    volume_configurations = @(
-        @{
-            name = "SQL-Data"
-            count = "1"
-            provisioned_size = "5497558138880"  # 5TB in bytes
-            placement_configurations = @("Data-Placement")
-            snapshot_configurations = @("Data-Snapshots")
-            periodic_replication_configurations = @("CrossArray-Replication-PG")
-        },
-        @{
-            name = "SQL-Log"
-            count = "1"
-            provisioned_size = "1099511627776"  # 1TB in bytes
-            placement_configurations = @("Data-Placement")
-            snapshot_configurations = @("Data-Snapshots")
-            periodic_replication_configurations = @("CrossArray-Replication-PG")
-        },
-        @{
-            name = "SQL-TempDB"
-            count = "1"
-            provisioned_size = "2199023255552"  # 2TB in bytes
-            placement_configurations = @("Data-Placement")
-            snapshot_configurations = @()        # No snapshots for temp data
-            periodic_replication_configurations = @()  # No replication for temp data
-        },
-        @{
-            name = "SQL-System"
-            count = "1"
-            provisioned_size = "536870912000"   # 500GB in bytes
-            placement_configurations = @("Data-Placement")
-            snapshot_configurations = @("Data-Snapshots")
-            periodic_replication_configurations = @("CrossArray-Replication-PG")
-        }
-    )
-    
-    # Workload tags for metadata and automation
-    workload_tags = @(
-        @{ key = "database-type"; value = "sql-server" },
-        @{ key = "application"; value = "enterprise-app" },
-        @{ key = "tier"; value = "production" },
-        @{ key = "backup-required"; value = "true" },
-        @{ key = "replication-enabled"; value = "true" },
-        @{ key = "dr-priority"; value = "high" },
-        @{ key = "rpo"; value = "1-hour" },
-        @{ key = "target-array"; value = $SecondaryArrayName.Split('.')[0] }
-    )
-}
-
-# Convert to JSON and send REST request
-$jsonBody = $restBody | ConvertTo-Json -Depth 10
-
-# Execute REST API call to create the preset, Invoke-Pfa2RestCommand doesn't have ContextNames, so we add it to the Uri
-$result = Invoke-Pfa2RestCommand -Array $PrimaryArray  `
-    -RelativeUri "presets/workload?context_names=fsa-lab-fleet1&names=SQL-Server-MultiDisk-Optimized-Replication" `
-    -Method POST `
-    -Body $jsonBody
-
-$result
 
 # ===============================================
 # CREATE WORKLOAD FROM PRESET
@@ -350,8 +235,8 @@ $RemoteProtectionGroupToDelete
 
 
 # If we want we can remove it from the X array, which is the source array, you have to scope the command to the array where the snapshots are
-Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name  -Name $LocalProtectionGroupToDelete.Name
-Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames  $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name -Eradicate -Confirm:$false
+Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name
+Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name -Eradicate -Confirm:$false
 
 
 
