@@ -86,7 +86,8 @@ $presetParams = @{
     # Replication Configuration: Cross-array protection for disaster recovery
     PeriodicReplicationConfigurationsName           = @("CrossArray-Replication-PG")
     PeriodicReplicationConfigurationsRulesEvery     = @("600000")      # Replicate every 10 minutes
-    PeriodicReplicationConfigurationsRulesKeepFor   = @("2419200000")  # Keep replicas for 28 days
+    PeriodicReplicationConfigurationsRulesKeepFor   = @($((New-TimeSpan -Days 28).TotalMilliseconds))  # Keep replicas for 28 days
+    
     PeriodicReplicationConfigurationsRemoteTargets  = $(
         $rt = [System.Collections.Generic.List[System.Collections.Generic.List[string]]]::new()
         $inner = [System.Collections.Generic.List[string]]::new()
@@ -96,6 +97,8 @@ $presetParams = @{
         $rt.Add($inner)
         $rt
     )
+
+
     # Apply replication to all volumes except TempDB (can be recreated in DR)
     VolumeConfigurationsPeriodicReplicationConfigurations = @(
         @("CrossArray-Replication-PG"),  # SQL-Data gets replicated
@@ -237,8 +240,3 @@ $RemoteProtectionGroupToDelete
 # If we want we can remove it from the X array, which is the source array, you have to scope the command to the array where the snapshots are
 Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name
 Remove-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $LocalProtectionGroupToDelete.Context.Name -Name $LocalProtectionGroupToDelete.Name -Eradicate -Confirm:$false
-
-
-
-#### Questions
-# 1. Does this help us with the vvol problem

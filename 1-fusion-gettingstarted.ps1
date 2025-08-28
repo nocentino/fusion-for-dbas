@@ -6,7 +6,29 @@
 # - X90R2 arrays: High-performance production workloads
 $ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'    
 $Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
-$FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError
+$FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError -Verbose
+
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:41.5760540Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/apitoken
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:43.3616270Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/session
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:43.6965120Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anocentino
+VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:44.5050460Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anocentino  809ms {"name": "anocentino", "role": "array_admin"}
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:44.5059360Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login <no body>
+VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:44.9186390Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login 200 413ms {"items":[{"username":"anocentino"}]}
+VERBOSE: PureStorage.Rest Verbose: 13 : 2025-08-27T13:17:44.9191330Z sn1-x90r2-f06-27.puretec.purestorage.com: Connect-Pfa2Array (PSCredential) Endpoint=sn1-x90r2-f06-27.puretec.purestorage.com Credential=System.Management.Automation.PSCredential IgnoreCertificateError=True Verbose=True
+
+
+# Example API request: Get array info
+$ArrayEndpoint = 'sn1-x90r2-f06-27.puretec.purestorage.com' # FlashArray's IP or DNS name
+$ApiToken      = "6a20f30a-2c4b-90eb-ada3-bcae602637a8"     # Paste your valid API token
+$fa            = Connect-Pfa2Array -ApiToken $ApiToken -Endpoint $ArrayEndpoint -IgnoreCertificateError
+
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:02.5634320Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/session
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:02.8450970Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anthony-exporter
+VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:03.1304660Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anthony-exporter  287ms {"name": "anthony-exporter", "role": "readonly"}
+VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:03.1306520Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login <no body>
+VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:03.3958940Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login 200 265ms {"items":[{"username":"anthony-exporter"}]}
+VERBOSE: PureStorage.Rest Verbose: 13 : 2025-08-27T13:17:03.3961860Z sn1-x90r2-f06-27.puretec.purestorage.com: Connect-Pfa2Array (ApiToken) ApiToken=6a20f30a-2c4b-90eb-ada3-bcae602637a8 Endpoint=sn1-x90r2-f06-27.puretec.purestorage.com IgnoreCertificateError=True Verbose=True
+
 
 # ===============================================
 # DISCOVER AVAILABLE FUSION CMDLETS
@@ -138,46 +160,6 @@ $PGName
 # Snapshots are created automatically based on the schedule defined in the preset
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'"
 
-
-# ===============================================
-# FLEET-WIDE MANAGEMENT DEMONSTRATION
-# ===============================================
-# Fusion enables management across all arrays in the fleet from a single connection
-# This eliminates the need to connect to each array individually
-
-# Get all fleet members, excluding non-FlashArray systems
-# The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types
-$FleetMembers = Get-Pfa2FleetMember -Array $FlashArray -Filter "Member.Name!='sn1-s200-c09-33'"
-$FleetMembers.Member.Name
-
-
-# List all arrays in the fleet
-Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Format-List
-
-
-# Search the entire fleet for protection group snapshots
-# The ContextNames parameter enables fleet-wide queries
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='$($PGName.Name)*'" -Limit 10 | 
-    Format-Table -AutoSize
-
-# ===============================================
-# INDIVIDUAL ARRAY QUERIES (FOR COMPARISON)
-# ===============================================
-# These commands show how to query specific arrays in the fleet
-# Useful when you need to isolate operations to a single array
-
-# Query snapshots on the C60 array (typically used for dev/test)
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[0].Member.Name)" -Limit 10
-
-
-# Query snapshots on the primary X90 array
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[1].Member.Name)" -Limit 10
-
-
-# Query snapshots on the secondary X90 array
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[2].Member.Name)" -Limit 10
-
-
 # ===============================================
 # BULK WORKLOAD DEPLOYMENT
 # ===============================================
@@ -291,21 +273,3 @@ Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "P
 Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" -Eradicate -Confirm:$false
 
 
-# ===============================================
-# ADVANCED FUSION TOPICS (FUTURE EXPLORATION)
-# ===============================================
-# The following topics represent advanced Fusion capabilities for future scripts:
-
-# **Using Fusion for Remote Command Execution**: Fusion allows for remote command execution across all objects in your fleet rather than just per array
-
-# **Building a Global Snapshot Catalog**: Using tags combined with Fusion's fleet-wide scope, you can find and consume a snapshot anywhere in your Fleet
-
-# **Updating Workload Presets**: How to modify existing Presets and handle versioning as your requirements evolve
-
-# **Adding resources to an existing workload**: Techniques for expanding the resource allocation of a running workload, such as adding a volume. Does it go into the PG?
-
-# **Finding Configuration Skew**: Use PowerShell to find configuration skew in your environment
-
-# **Fleet-Wide Monitoring**: Gathering performance metrics and capacity data across all arrays from a single control point
-
-# **Advanced Placement Strategies**: Using Workload placement recommendations to optimize resource utilization across your Fleet
