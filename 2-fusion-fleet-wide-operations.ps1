@@ -3,26 +3,32 @@
 # ===============================================
 # Fusion enables management across all arrays in the fleet from a single connection
 # This eliminates the need to connect to each array individually
+$ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'    
+$Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
+$FlashArray = Connect-Pfa2Array -EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError -Verbose
 
 
 
-# List existing snapshots for the protection group
-# Snapshots are created automatically based on the schedule defined in the preset
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'"
+# Connect to our Fusion-enabled FlashArray and get a listing of all of the members of our fleet
+Get-Pfa2FleetMember -Array $FlashArray 
 
 
-# Get all fleet members, excluding non-FlashArray systems
-# The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types
+# Get all fleet members. The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types
 $FleetMembers = Get-Pfa2FleetMember -Array $FlashArray -Filter "Member.Name!='sn1-s200-c09-33'"
 $FleetMembers.Member.Name
 
 
-# List all arrays in the fleet
+# List all arrays in the fleet by connecting to each array and running the cmdlet Get-Pfa2Array
 Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Format-List
+
+
+# List existing snapshots for the protection group, this listing is all of the snapshots from THIS FlashArray
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'"
 
 
 # Search the entire fleet for protection group snapshots
 # The ContextNames parameter enables fleet-wide queries
+# These snapshots are from any protection group snapshot, not just the ones managed by our fusion created workloads.
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='$($PGName.Name)*'" -Limit 10 | 
     Format-Table -AutoSize
 
@@ -33,7 +39,7 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.M
 # Useful when you need to isolate operations to a single array
 
 # Query snapshots on the C60 array (typically used for dev/test)
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[0].Member.Name)" -Limit 10
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[0].Member.Name)" -Limit 10 -Verbose
 
 
 # Query snapshots on the primary X90 array
@@ -45,58 +51,42 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMember
 
 
 # ===============================================
-# BULK WORKLOAD DEPLOYMENT
-# ===============================================
-# Deploy multiple SQL Server instances using the same preset
-# This ensures consistency across all deployments
-
-$SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
-
-foreach ($instance in $SQLInstances) {
-    $workloadParams = @{
-        Array       = $FlashArray
-        Name        = $instance
-        PresetNames = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
-    }
-    
-    New-Pfa2Workload @workloadParams
-    Write-Output "Created workload for $instance"
-}
-
-# List all workloads across the fleet that use our SQL Server preset
-Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-Table -AutoSize
-
-# ===============================================
 # CROSS-ARRAY WORKLOAD DEPLOYMENT
 # ===============================================
 # Deploy a workload on a different array (if connected)
 # This demonstrates Fusion's ability to manage workloads regardless of which array you're connected to
 # The scope of the preset is the whole fleet
 
-$workloadParams2 = @{
+$workloadParams1 = @{
     Array        = $FlashArray
     ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-33' }
     Name         = "Production-SQL-03"
     PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
 }
 
-New-Pfa2Workload @workloadParams2
+New-Pfa2Workload @workloadParams1
 
 # Create another workload with the same name in a different context
-$workloadParams3 = @{
+$workloadParams2 = @{
     Array        = $FlashArray
     ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-27' }
     Name         = "Production-SQL-03"
     PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
 }
 
-New-Pfa2Workload @workloadParams3
+New-Pfa2Workload @workloadParams2
 
-
-# Get all workloads using the SQL Server preset
+# Get all workloads across all arrays using the SQL Server preset
 Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
     Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
+
+
+# Query all arrays in the fleet for protection groups associated with our workload
+# This returns both local snapshot PGs on all arrays in our fleet
+$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetInfo.Member.Name -Filter "workload.name='Production-SQL-03'"
+$PGNames
+
+
 
 # ===============================================
 # CLEANUP OPERATIONS
@@ -121,18 +111,12 @@ Get-Pfa2Workload -Array $PrimaryArray -Destroyed $true |
 Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"  -ContextNames $ContextName -Eradicate
 
 
-# Remove workloads
+# Remove workloads by finding the workloads array, then using remote execution to remove the workload from that array
 $SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
 
 foreach ($instance in $SQLInstances) {
     $ContextName = (Get-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $FleetMembers.Member.Name).Context.Name
     Write-output "Context for $instance is $ContextName"
-
-    $workloadParams = @{
-        Array       = $FlashArray
-        Name        = $instance
-        ContextName = $ContextName
-    }
 
     Remove-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $ContextName
     Write-Output "Removed workload for $instance"
@@ -155,3 +139,4 @@ Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-27' -Name "P
 
 Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" 
 Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" -Eradicate -Confirm:$false
+

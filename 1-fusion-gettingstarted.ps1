@@ -1,33 +1,10 @@
 # ===============================================
 # ARRAY CONNECTION AND SELECTION
 # ===============================================
-# Multiple arrays are available in the fleet - uncomment the one you want to use
-# Each array serves different purposes:
 # - X90R2 arrays: High-performance production workloads
 $ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'    
 $Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
 $FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError -Verbose
-
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:41.5760540Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/apitoken
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:43.3616270Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/session
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:43.6965120Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anocentino
-VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:44.5050460Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anocentino  809ms {"name": "anocentino", "role": "array_admin"}
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:44.5059360Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login <no body>
-VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:44.9186390Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login 200 413ms {"items":[{"username":"anocentino"}]}
-VERBOSE: PureStorage.Rest Verbose: 13 : 2025-08-27T13:17:44.9191330Z sn1-x90r2-f06-27.puretec.purestorage.com: Connect-Pfa2Array (PSCredential) Endpoint=sn1-x90r2-f06-27.puretec.purestorage.com Credential=System.Management.Automation.PSCredential IgnoreCertificateError=True Verbose=True
-
-
-# Example API request: Get array info
-$ArrayEndpoint = 'sn1-x90r2-f06-27.puretec.purestorage.com' # FlashArray's IP or DNS name
-$ApiToken      = "6a20f30a-2c4b-90eb-ada3-bcae602637a8"     # Paste your valid API token
-$fa            = Connect-Pfa2Array -ApiToken $ApiToken -Endpoint $ArrayEndpoint -IgnoreCertificateError
-
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:02.5634320Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/auth/session
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:02.8450970Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anthony-exporter
-VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:03.1304660Z PUT https://sn1-x90r2-f06-27.puretec.purestorage.com/api/1.16/admin/anthony-exporter  287ms {"name": "anthony-exporter", "role": "readonly"}
-VERBOSE: PureStorage.Rest Verbose: 10 : 2025-08-27T13:17:03.1306520Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login <no body>
-VERBOSE: PureStorage.Rest Verbose: 11 : 2025-08-27T13:17:03.3958940Z POST https://sn1-x90r2-f06-27.puretec.purestorage.com/api/2.2/login 200 265ms {"items":[{"username":"anthony-exporter"}]}
-VERBOSE: PureStorage.Rest Verbose: 13 : 2025-08-27T13:17:03.3961860Z sn1-x90r2-f06-27.puretec.purestorage.com: Connect-Pfa2Array (ApiToken) ApiToken=6a20f30a-2c4b-90eb-ada3-bcae602637a8 Endpoint=sn1-x90r2-f06-27.puretec.purestorage.com IgnoreCertificateError=True Verbose=True
 
 
 # ===============================================
@@ -118,7 +95,7 @@ Get-Pfa2PresetWorkload -Array $FlashArray | Where-Object { $_.Name -like "fsa-la
 # DEPLOY WORKLOAD FROM PRESET
 # ===============================================
 # Create a production SQL Server instance using our standardized preset
-# This single command creates all volumes, configures QoS, and sets up snapshots
+# This single command creates all volumes, configures QoS, and sets up protection group snapshots
 
 
 # Example 1: Create Production SQL Server Workload
@@ -164,6 +141,7 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name
 # BULK WORKLOAD DEPLOYMENT
 # ===============================================
 # Deploy multiple SQL Server instances using the same preset
+# These workloads are being placed on the FlashArray we're connected to. We will cover cross-array deployment later.
 # This ensures consistency across all deployments
 
 $SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
@@ -178,98 +156,3 @@ foreach ($instance in $SQLInstances) {
     New-Pfa2Workload @workloadParams
     Write-Output "Created workload for $instance"
 }
-
-# List all workloads across the fleet that use our SQL Server preset
-Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-Table -AutoSize
-
-# ===============================================
-# CROSS-ARRAY WORKLOAD DEPLOYMENT
-# ===============================================
-# Deploy a workload on a different array (if connected)
-# This demonstrates Fusion's ability to manage workloads regardless of which array you're connected to
-# The scope of the preset is the whole fleet
-
-$workloadParams2 = @{
-    Array        = $FlashArray
-    ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-33' }
-    Name         = "Production-SQL-03"
-    PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
-}
-
-New-Pfa2Workload @workloadParams2
-
-# Create another workload with the same name in a different context
-$workloadParams3 = @{
-    Array        = $FlashArray
-    ContextNames = ($FleetMembers.Member.Name) | Where-Object { $_ -eq 'sn1-x90r2-f06-27' }
-    Name         = "Production-SQL-03"
-    PresetNames  = @("fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized")
-}
-
-New-Pfa2Workload @workloadParams3
-
-
-# Get all workloads using the SQL Server preset
-Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
-
-# ===============================================
-# CLEANUP OPERATIONS
-# ===============================================
-# Remove test workloads and presets
-# WARNING: This will delete all volumes and data associated with these workloads
-
-# Remove individual workloads
-$ContextName = (Get-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01" -ContextNames $FleetMembers.Member.Name).Context.Name
-Write-output "Context for Production-SQL-01 is $ContextName"
-
-Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01" -ContextNames $ContextName
-
-
-# Verify workload destruction status
-Get-Pfa2Workload -Array $PrimaryArray -Destroyed $true | 
-    Where-Object { $_.Name -eq "Production-SQL-01" } | 
-    Format-List Name, Destroyed, TimeRemaining
-
-
-# Force immediate eradication of the destroyed workload
-Remove-Pfa2Workload -Array $FlashArray -Name "Production-SQL-01"  -ContextNames $ContextName -Eradicate
-
-
-# Remove workloads
-$SQLInstances = @("Production-SQL-02", "DR-SQL-01", "Test-SQL-01", "Dev-SQL-01")
-
-foreach ($instance in $SQLInstances) {
-    $ContextName = (Get-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $FleetMembers.Member.Name).Context.Name
-    Write-output "Context for $instance is $ContextName"
-
-    $workloadParams = @{
-        Array       = $FlashArray
-        Name        = $instance
-        ContextName = $ContextName
-    }
-
-    Remove-Pfa2Workload -Array $FlashArray -Name $instance -ContextNames $ContextName
-    Write-Output "Removed workload for $instance"
-    
-    Remove-Pfa2Workload -Array $FlashArray -Name $instance -Eradicate -Confirm:$false
-    Write-Output "Eradicated workload for $instance"
-}
-
-
-# Remove the preset which you can do even with a workload deployed 
-Remove-Pfa2PresetWorkload -Array $FlashArray -ContextNames 'fsa-lab-fleet1' -Name "SQL-Server-MultiDisk-Optimized" 
-
-
-# Remove our last workload
-Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
-
-Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-27' -Name "Production-SQL-03" 
-Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-27' -Name "Production-SQL-03" -Eradicate -Confirm:$false
-
-Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" 
-Remove-Pfa2Workload -Array $FlashArray -ContextNames 'sn1-x90r2-f06-33' -Name "Production-SQL-03" -Eradicate -Confirm:$false
-
-
