@@ -23,13 +23,17 @@ Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Forma
 
 
 # List existing snapshots for the protection group, this listing is all of the snapshots from THIS FlashArray
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'"
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'" -Sort "created-"
 
 
 # Search the entire fleet for protection group snapshots
 # The ContextNames parameter enables fleet-wide queries
 # These snapshots are from any protection group snapshot, not just the ones managed by our fusion created workloads.
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='$($PGName.Name)*'" -Limit 10 | 
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='*sql*'" -Sort "created-" -Limit 10 | 
+    Format-Table -AutoSize
+
+# But we cannot do array side filtering using sort...
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='*sql*'" -Limit 10 | 
     Format-Table -AutoSize
 
 # ===============================================
@@ -39,15 +43,18 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.M
 # Useful when you need to isolate operations to a single array
 
 # Query snapshots on the C60 array (typically used for dev/test)
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[0].Member.Name)" -Limit 10 -Verbose
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[0].Member.Name)" -Limit 10  -Sort "created-" -Verbose |
+    Format-Table -AutoSize
 
 
 # Query snapshots on the primary X90 array
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[1].Member.Name)" -Limit 10
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[1].Member.Name)" -Limit 10 -Sort "created-" | 
+    Format-Table -AutoSize
 
 
 # Query snapshots on the secondary X90 array
-Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[2].Member.Name)" -Limit 10
+Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames "$($FleetMembers[2].Member.Name)" -Limit 10 -Sort "created-" | 
+    Format-Table -AutoSize
 
 
 # ===============================================
@@ -83,8 +90,8 @@ Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name |
 
 # Query all arrays in the fleet for protection groups associated with our workload
 # This returns both local snapshot PGs on all arrays in our fleet
-$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetInfo.Member.Name -Filter "workload.name='Production-SQL-03'"
-$PGNames
+$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Filter "workload.name='Production-SQL-03'"
+$PGNames | Format-Table -AutoSize
 
 
 

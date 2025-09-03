@@ -7,10 +7,10 @@ $PrimaryArray = Connect-Pfa2Array –EndPoint $PrimaryArrayName -Credential $Cre
 
 
 
-$PrimaryFleetInfo = Get-Pfa2FleetMember -Array $PrimaryArray -Filter "Member.Name!='sn1-s200-c09-33' and Member.Name!='sn1-c60-e12-16'"
+$PrimaryFleetInfo = Get-Pfa2FleetMember -Array $PrimaryArray 
 
 
-# TODO: Get all members that have our SQL Server workload deployed
+# Get all members that have our SQL Server workload deployed
 
 
 # Get a listing of all protection group snapshots across all arrays in our fleet

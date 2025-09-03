@@ -85,9 +85,11 @@ $presetParams = @{
 
     # Replication Configuration: Cross-array protection for disaster recovery
     PeriodicReplicationConfigurationsName           = @("CrossArray-Replication-PG")
-    PeriodicReplicationConfigurationsRulesEvery     = @("600000")      # Replicate every 10 minutes
+    PeriodicReplicationConfigurationsRulesEvery     = @("600000")                                      # Replicate every 10 minutes
     PeriodicReplicationConfigurationsRulesKeepFor   = @($((New-TimeSpan -Days 28).TotalMilliseconds))  # Keep replicas for 28 days
     
+
+    # There is currently a bug in the cmdlet's parameters, so we have to build the object manually to it matches the required type.
     PeriodicReplicationConfigurationsRemoteTargets  = $(
         $rt = [System.Collections.Generic.List[System.Collections.Generic.List[string]]]::new()
         $inner = [System.Collections.Generic.List[string]]::new()
@@ -127,6 +129,7 @@ $workloadParams1 = @{
 }
 New-Pfa2Workload @workloadParams1
 
+
 # Verify the workload was created successfully
 Get-Pfa2Workload -Array $PrimaryArray | 
     Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized-Replication' } | Format-List
@@ -164,6 +167,7 @@ $RemoteProtectionGroup.Name
 # Build the remote protection group name to include the source array name and the protection group name
 $RemoteProtectionGroupName = "$($RemoteProtectionGroup.Source.Name):$($RemoteProtectionGroup.Name)"
 $RemoteProtectionGroupName
+
 
 # ===============================================
 # LOCATE REPLICATED DATA
@@ -214,7 +218,7 @@ Remove-Pfa2PresetWorkload -Array $FlashArray -ContextNames 'fsa-lab-fleet1' -Nam
 
 ########################################################################################################################
 #
-# When we removed the workload what happened to the protection group snapshots on the source and target arrays?
+# When we removed the workload what happens to the protection group snapshots on the source and target arrays?
 #
 ########################################################################################################################
 
