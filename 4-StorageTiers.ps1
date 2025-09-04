@@ -309,42 +309,6 @@ New-Pfa2Workload @BronzeWorkload
 
 
 
-Write-Output "`nAdding volumes to Bronze workload (WebApp-Dev-01)..."
-$bronzeContext = (Get-Pfa2Workload -Array $PrimaryArray  -ContextNames $FleetMembers.Member.Name -Name "WebApp-Dev-01").Context.Name
-
-
-# Add logs volume, notice we don't have to give it a name...all preset configurations will be applied to this volume using the workload configuration/
-New-Pfa2Volume -Array $PrimaryArray `
-    -ContextNames $bronzeContext `
-    -Provisioned 100GB `
-    -WorkloadName "WebApp-Dev-01" `
-    -WorkloadConfiguration 'Bronze-Vol'
-
-
-# The volume is added to the workload
-Get-Pfa2Volume -Array $PrimaryArray -ContextNames $bronzeContext -Filter "workload.name='WebApp-Dev-01'" | Format-Table -AutoSize
-
-
-# Which also adds it to the protection group
-$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Filter "workload.name='WebApp-Dev-01'"
-$PGNames | Format-Table -AutoSize
-
-
-# Here is a listing of the volumes now in the protection group
-Get-Pfa2ProtectionGroupVolume -Array $PrimaryArray -ContextNames $bronzeContext -GroupName $PGNames.Name | Format-Table -AutoSize
-
-
-# The new volume is also added to the volume group, which means the QoS policy will apply
-$VGNames = Get-Pfa2VolumeGroup -Array $PrimaryArray -ContextNames $bronzeContext -Filter "workload.name='WebApp-Dev-01'" 
-$VGNames
-
-
-# Here is a listing of the volumes in the volume group, including our newly added one
-Get-Pfa2VolumeGroupVolume -Array $PrimaryArray -ContextNames $bronzeContext -GroupName $VGNames.Name | Format-List
-
-
-
-
 # 2. Silver Workload - Let placement engine decide (will go to X array)
 Write-Output "`nCreating Silver tier workload..."
 $SilverWorkload = @{
@@ -358,17 +322,54 @@ New-Pfa2Workload @SilverWorkload
 
 
 
-
 # 3. Gold Workload - Create first, then add volumes
 Write-Output "`nCreating Gold tier workload..."
 $GoldWorkload = @{
     Array        = $PrimaryArray
     ContextNames = ($FleetMembers.Member.Name | Where-Object { $_ -eq 'sn1-x90r2-f06-33' })
-    Name         = "Analytics-Critical-01"
+    Name         = "Database-Prod-01"
     PresetNames  = @("fsa-lab-fleet1:Compute-Gold-WithRepl")
 }
 
 New-Pfa2Workload @GoldWorkload
+
+
+
+
+
+Write-Output "`nAdding volumes to Gold workload (Database-Prod-01)..."
+$goldContext = (Get-Pfa2Workload -Array $PrimaryArray  -ContextNames $FleetMembers.Member.Name -Name "Database-Prod-01").Context.Name
+
+
+# Add logs volume, notice we don't have to give it a name...all preset configurations will be applied to this volume using the workload configuration/
+New-Pfa2Volume -Array $PrimaryArray `
+    -ContextNames $goldContext `
+    -Provisioned 100GB `
+    -WorkloadName "Database-Prod-01" `
+    -WorkloadConfiguration 'Gold-Vol'
+
+
+# The volume is added to the workload
+Get-Pfa2Volume -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" | Format-Table -AutoSize
+
+
+# Which also adds it to the protection group
+$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Filter "workload.name='Database-Prod-01'"
+$PGNames | Format-Table -AutoSize
+
+
+# Here is a listing of the volumes now in the protection group
+Get-Pfa2ProtectionGroupVolume -Array $PrimaryArray -ContextNames $goldContext -GroupName $PGNames.Name | Format-Table -AutoSize
+
+
+# The new volume is also added to the volume group, which means the QoS policy will apply
+$VGNames = Get-Pfa2VolumeGroup -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" 
+$VGNames
+
+
+# Here is a listing of the volumes in the volume group, including our newly added one
+Get-Pfa2VolumeGroupVolume -Array $PrimaryArray -ContextNames $goldContext -GroupName $VGNames.Name | Format-List
+
 
 
 
