@@ -350,7 +350,7 @@ New-Pfa2Volume -Array $PrimaryArray `
 
 
 # The volume is added to the workload
-Get-Pfa2Volume -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" | Format-Table -AutoSize
+Get-Pfa2Volume -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" -Verbose| Format-Table -AutoSize
 
 
 # Which also adds it to the protection group
