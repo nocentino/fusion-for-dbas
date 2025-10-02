@@ -9,6 +9,8 @@ $SecondaryArrayName = 'sn1-c60-e12-16.puretec.purestorage.com'
 $Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
 $PrimaryArray = Connect-Pfa2Array –EndPoint $PrimaryArrayName -Credential $Credential -IgnoreCertificateError
 
+# Blog: https://www.nocentino.com/posts/2025-09-04-managing-storage-with-fusion-powershell-storage-tiers/
+
 
 # ===============================================
 # VERIFY FLEET MEMBERSHIP AND ARRAY CONNECTIONS
@@ -234,7 +236,7 @@ $GoldPresetWithRepl = @{
     ContextNames                                    = 'fsa-lab-fleet1'
     Name                                            = "Compute-Gold-WithRepl"
     Description                                     = "Gold tier compute workload with aggressive replication"
-    WorkloadType                                    = "Custom"
+    WorkloadType                                    = "database"
 
     # QoS Configuration - Set very high limits
     QosConfigurationsName                           = @("Gold-QoS")
@@ -327,34 +329,34 @@ Write-Output "`nCreating Gold tier workload..."
 $GoldWorkload = @{
     Array        = $PrimaryArray
     ContextNames = ($FleetMembers.Member.Name | Where-Object { $_ -eq 'sn1-x90r2-f06-33' })
-    Name         = "Database-Prod-01"
+    Name         = "Database-Prod-02"
     PresetNames  = @("fsa-lab-fleet1:Compute-Gold-WithRepl")
 }
 
 New-Pfa2Workload @GoldWorkload
 
 
+### Note, size you can have a workload with the same name in different contexts it can cause finding your workload to be more challenging
+# For example, if this was "Database-Prod-01" in both "sn1-x90r2-f06-33" and "sn1-x90r2-f06-34", it could be harder to identify which one you're working with.
 
-
-
-Write-Output "`nAdding volumes to Gold workload (Database-Prod-01)..."
-$goldContext = (Get-Pfa2Workload -Array $PrimaryArray  -ContextNames $FleetMembers.Member.Name -Name "Database-Prod-01").Context.Name
+Write-Output "`nAdding volumes to Gold workload (Database-Prod-02)..."
+$goldContext = (Get-Pfa2Workload -Array $PrimaryArray  -ContextNames $FleetMembers.Member.Name -Name "Database-Prod-02").Context.Name
 
 
 # Add logs volume, notice we don't have to give it a name...all preset configurations will be applied to this volume using the workload configuration/
 New-Pfa2Volume -Array $PrimaryArray `
     -ContextNames $goldContext `
     -Provisioned 100GB `
-    -WorkloadName "Database-Prod-01" `
+    -WorkloadName "Database-Prod-02" `
     -WorkloadConfiguration 'Gold-Vol'
 
 
 # The volume is added to the workload
-Get-Pfa2Volume -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" -Verbose| Format-Table -AutoSize
+Get-Pfa2Volume -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-02'" -Verbose| Format-Table -AutoSize
 
 
 # Which also adds it to the protection group
-$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Filter "workload.name='Database-Prod-01'"
+$PGNames = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Filter "workload.name='Database-Prod-02'"
 $PGNames | Format-Table -AutoSize
 
 
@@ -363,7 +365,7 @@ Get-Pfa2ProtectionGroupVolume -Array $PrimaryArray -ContextNames $goldContext -G
 
 
 # The new volume is also added to the volume group, which means the QoS policy will apply
-$VGNames = Get-Pfa2VolumeGroup -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-01'" 
+$VGNames = Get-Pfa2VolumeGroup -Array $PrimaryArray -ContextNames $goldContext -Filter "workload.name='Database-Prod-02'"
 $VGNames
 
 
@@ -393,7 +395,7 @@ Get-Pfa2Volume -Array $PrimaryArray -ContextNames $FleetMembers.Member.Name -Fil
 
 <#
 # To remove the demonstration workloads:
-$demoWorkloads = @("WebApp-Dev-01", "Database-Prod-01", "Analytics-Critical-01")
+$demoWorkloads = @("WebApp-Dev-01", "Database-Prod-01", "Database-Prod-02", "Analytics-Critical-01")
 
 foreach ($workloadName in $demoWorkloads) {
     $contextName = (Get-Pfa2Workload -Array $PrimaryArray -Name $workloadName -ContextNames $FleetMembers.Member.Name).Context.Name

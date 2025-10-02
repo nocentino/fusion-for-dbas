@@ -13,16 +13,21 @@ $FlashArray = Connect-Pfa2Array -EndPoint $ArrayName -Credential $Credential -Ig
 Get-Pfa2FleetMember -Array $FlashArray 
 
 
-# Get all fleet members. The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types
+# Get all fleet members. The FlashBlade (sn1-s200-c09-33) is excluded as it uses different object types.
+# Suggestion, let's have the Platform type in the values returned here.
 $FleetMembers = Get-Pfa2FleetMember -Array $FlashArray -Filter "Member.Name!='sn1-s200-c09-33'"
 $FleetMembers.Member.Name
 
 
 # List all arrays in the fleet by connecting to each array and running the cmdlet Get-Pfa2Array
-Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Format-List
+Get-Pfa2Array -Array $FlashArray -ContextNames $FleetMembers.Member.Name | Format-Table -AutoSize
 
 
 # List existing snapshots for the protection group, this listing is all of the snapshots from THIS FlashArray
+# Get the protection group automatically created for snapshot management
+$PGName = Get-Pfa2ProtectionGroup -Array $FlashArray -Filter "workload.name='Production-SQL-01'"
+$PGName
+
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'" -Sort "created-"
 
 
@@ -31,6 +36,7 @@ Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name
 # These snapshots are from any protection group snapshot, not just the ones managed by our fusion created workloads.
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='*sql*'" -Sort "created-" -Limit 10 | 
     Format-Table -AutoSize
+
 
 # But we cannot do array side filtering using sort...
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -ContextNames $FleetMembers.Member.Name -Filter "name='*sql*'" -Limit 10 | 
@@ -84,6 +90,7 @@ $workloadParams2 = @{
 New-Pfa2Workload @workloadParams2
 
 # Get all workloads across all arrays using the SQL Server preset
+# We should really have -Filter here to limit the results array side
 Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name | 
     Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Sort-Object -Property Name | Format-Table -AutoSize
 

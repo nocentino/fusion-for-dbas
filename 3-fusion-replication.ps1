@@ -47,6 +47,13 @@ $remoteArray
 # - Cross-array replication for disaster recovery
 # Build one remote target as a List[string]
 
+$ReplicationTargets = [System.Collections.Generic.List[System.Collections.Generic.List[string]]]::new()
+$inner = [System.Collections.Generic.List[string]]::new()
+$inner.Add("")
+$inner.Add($remoteArray.Name)
+$inner.Add("remote-arrays")
+$ReplicationTargets.Add($inner)
+
 $presetParams = @{
     Array                                           = $PrimaryArray
     ContextNames                                    = 'fsa-lab-fleet1'  # The Fusion context where this preset will be created
@@ -84,22 +91,10 @@ $presetParams = @{
     )
 
     # Replication Configuration: Cross-array protection for disaster recovery
+    PeriodicReplicationConfigurationsRemoteTargets  = $ReplicationTargets
     PeriodicReplicationConfigurationsName           = @("CrossArray-Replication-PG")
-    PeriodicReplicationConfigurationsRulesEvery     = @("600000")                                      # Replicate every 10 minutes
-    PeriodicReplicationConfigurationsRulesKeepFor   = @($((New-TimeSpan -Days 28).TotalMilliseconds))  # Keep replicas for 28 days
-    
-
-    # There is currently a bug in the cmdlet's parameters, so we have to build the object manually to it matches the required type.
-    PeriodicReplicationConfigurationsRemoteTargets  = $(
-        $rt = [System.Collections.Generic.List[System.Collections.Generic.List[string]]]::new()
-        $inner = [System.Collections.Generic.List[string]]::new()
-        $inner.Add("")
-        $inner.Add("sn1-c60-e12-16")
-        $inner.Add("remote-arrays")
-        $rt.Add($inner)
-        $rt
-    )
-
+    PeriodicReplicationConfigurationsRulesEvery     = @(([TimeSpan]::FromMinutes(10).TotalMilliseconds).ToString())   # 10 minutes
+    PeriodicReplicationConfigurationsRulesKeepFor   = @(([TimeSpan]::FromDays(14).TotalMilliseconds).ToString())    # 14 days
 
     # Apply replication to all volumes except TempDB (can be recreated in DR)
     VolumeConfigurationsPeriodicReplicationConfigurations = @(
@@ -159,7 +154,7 @@ $PGNames
 
 
 # Identify local and remote protection groups
-$LocalProtectionGroup = $PGNames | Where-Object { $_.Workload._Configuration -eq 'Data-Snapshots' }
+$LocalProtectionGroup  = $PGNames | Where-Object { $_.Workload._Configuration -eq 'Data-Snapshots' }
 $RemoteProtectionGroup = $PGNames | Where-Object { $_.Workload._Configuration -eq 'CrossArray-Replication-PG' }
 $LocalProtectionGroup.Name
 $RemoteProtectionGroup.Name
@@ -173,7 +168,7 @@ $RemoteProtectionGroupName
 # LOCATE REPLICATED DATA
 # ===============================================
 # Find which array in the fleet contains the replicated protection group
-# The format is "source-array:protection-group-name" for replicated PGs
+# The format is "source-array:protection-group-name" for replicated PGs...eventually I don't want to use PG name, but Tags
 $TargetPGName = Get-Pfa2ProtectionGroup -Array $PrimaryArray -ContextNames $FleetInfo.Member.Name -Name $RemoteProtectionGroupName
 $TargetPGName
 
@@ -187,6 +182,8 @@ Write-Output "The protection group snapshots are on the array: $($TargetPGName.C
 # This shows snapshots on both source and target arrays
 Get-Pfa2ProtectionGroupSnapshot -Array $PrimaryArray -ContextNames $FleetInfo.Member.Name -Name $RemoteProtectionGroupName
 Write-Output "The snapshots are on the following arrays: $($TargetPGName.Context.Name)"
+
+# we don't want the user to have to care about this....
 
 # Measure the runtime of the previous cmdlet
 $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()

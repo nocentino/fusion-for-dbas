@@ -8,6 +8,8 @@ This repository provides practical examples of using Pure Storage Fusion to:
 - Create and manage standardized storage configurations (presets) for SQL Server
 - Deploy consistent workloads across multiple arrays in a fleet
 - Configure cross-array replication for disaster recovery
+- Implement storage tiering strategies (Bronze, Silver, Gold)
+- Build global snapshot catalogs for fleet-wide recovery
 - Implement storage best practices for SQL Server environments
 
 ## Prerequisites
@@ -21,11 +23,11 @@ This repository provides practical examples of using Pure Storage Fusion to:
 
 ```
 .
-├── 1-fusion-gettingstarted.ps1    # Introduction to Fusion workload management
-├── 2-fusion-replication.ps1       # Cross-array replication configuration
-└── docs/
-    ├── help.txt                   # PowerShell cmdlet documentation
-    └── swagger.json               # Pure Storage REST API reference
+├── 1-fusion-gettingstarted.ps1           # Introduction to Fusion workload management
+├── 2-fusion-fleet-wide-operations.ps1    # Fleet-wide management and operations
+├── 3-fusion-replication.ps1              # Cross-array replication configuration
+├── 4-StorageTiers.ps1                    # Storage tiering implementation
+└── fusion-global-snapshot-catalog.ps1    # Building a global snapshot catalog
 ```
 
 ## Scripts Overview
@@ -44,14 +46,65 @@ This script demonstrates fundamental Fusion concepts:
 - **Fleet-wide Management**: Querying and managing resources across all arrays
 - **Bulk Operations**: Deploying multiple workloads consistently
 
-### 2. Replication Configuration ([2-fusion-replication.ps1](2-fusion-replication.ps1))
+### 2. Fleet-wide Operations ([2-fusion-fleet-wide-operations.ps1](2-fusion-fleet-wide-operations.ps1))
+
+This script covers fleet-wide management capabilities:
+
+- **Single Connection Management**: Managing all arrays from one connection point
+- **Fleet-wide Queries**: Searching for resources across all arrays
+- **Cross-array Workload Deployment**: Creating workloads on any array in the fleet
+- **Protection Group Management**: Finding and managing snapshots fleet-wide
+- **Bulk Cleanup Operations**: Removing workloads and presets across arrays
+- **Context-aware Operations**: Working with workloads in different array contexts
+
+### 3. Replication Configuration ([3-fusion-replication.ps1](3-fusion-replication.ps1))
 
 This script covers advanced disaster recovery scenarios:
 
 - **Cross-array Replication**: Setting up periodic replication between arrays
 - **Selective Replication**: Excluding TempDB from replication (can be recreated)
-- **REST API Usage**: Alternative preset creation using REST API
+- **Protection Group Configuration**: Managing local and remote protection groups
+- **Fleet-wide Snapshot Discovery**: Finding replicated data across arrays
+- **Performance Optimization**: Efficient querying of specific target arrays
 - **DR Tags**: Adding metadata for DR priority and RPO tracking
+
+### 4. Storage Tiering ([4-StorageTiers.ps1](4-StorageTiers.ps1))
+
+This script implements a comprehensive storage tiering strategy:
+
+- **Bronze Tier**: 
+  - Target: FlashArray C (cost-optimized)
+  - QoS: 10,000 IOPS, 200 MB/s
+  - Snapshots: Every 6 hours, 7-day retention
+  - No replication
+- **Silver Tier**: 
+  - Target: FlashArray X (performance-optimized)
+  - QoS: 50,000 IOPS, 1 GB/s
+  - Snapshots: Every 2 hours, 14-day retention
+  - Optional bi-hourly replication
+- **Gold Tier**: 
+  - Target: FlashArray X (performance-optimized)
+  - QoS: 1M IOPS, 10 GB/s
+  - Snapshots: Every 30 minutes, 30-day retention
+  - Aggressive 15-minute replication
+
+### 5. Global Snapshot Catalog ([fusion-global-snapshot-catalog.ps1](fusion-global-snapshot-catalog.ps1))
+
+This script demonstrates advanced recovery scenarios:
+
+- **Fleet-wide Snapshot Discovery**: Finding snapshots across all arrays
+- **Metadata Tagging**: Using tags for catalog organization
+- **Cross-array Recovery**: Restoring from snapshots on remote arrays
+- **Workload Migration**: Moving workloads between arrays
+- **Automated Recovery**: Streamlining disaster recovery processes
+
+### 6. Workload Placement ([Untitled-2.ps1](Untitled-2.ps1))
+
+This script shows placement recommendation features:
+
+- **Placement Recommendations**: Using AI-driven placement suggestions
+- **Resource Optimization**: Finding the best array for workload deployment
+- **Capacity Planning**: Understanding placement based on available resources
 
 ## Key Concepts
 
@@ -69,6 +122,7 @@ Fusion enables management of multiple arrays as a single entity:
 - Deploy workloads to any array from a single connection
 - Query resources across the entire fleet
 - Maintain consistency with fleet-scoped presets
+- Execute commands remotely on any array
 
 ### SQL Server Best Practices
 The scripts implement storage best practices for SQL Server:
@@ -77,6 +131,7 @@ The scripts implement storage best practices for SQL Server:
 - Performance isolation with QoS
 - Automated snapshot protection
 - Cross-array replication for DR
+- Tiered storage for different workload requirements
 
 ## Usage Examples
 
@@ -104,16 +159,26 @@ Get-Pfa2Workload -Array $FlashArray -ContextNames $FleetMembers.Member.Name |
     Where-Object { $_.Preset.Name -match 'SQL-Server' }
 ```
 
+### Deploy Tiered Storage
+```powershell
+# Deploy a Bronze tier workload to FlashArray C
+$BronzeWorkload = @{
+    Array        = $PrimaryArray
+    ContextNames = 'sn1-c60-e12-16'
+    Name         = "WebApp-Dev-01"
+    PresetNames  = @("fsa-lab-fleet1:Compute-Bronze-NoRepl")
+}
+New-Pfa2Workload @BronzeWorkload
+```
+
 ## Advanced Topics
 
-The scripts mention several advanced topics for future exploration:
-- Remote command execution across fleets
-- Building global snapshot catalogs
-- Updating existing presets and versioning
-- Expanding running workloads
-- Finding configuration skew
-- Fleet-wide monitoring and capacity planning
-- Advanced placement strategies
+The repository includes ideas for future exploration (see [blog idea.txt](blog%20idea.txt)):
+- **Updating Workload Presets**: Modifying existing presets and version management
+- **Resource Expansion**: Adding volumes to running workloads
+- **Configuration Skew Detection**: Finding inconsistencies across the fleet
+- **Fleet-wide Monitoring**: Performance metrics and capacity planning
+- **Advanced Placement Strategies**: AI-driven workload placement optimization
 
 ## Important Notes
 
@@ -121,6 +186,13 @@ The scripts mention several advanced topics for future exploration:
 - The `-Eradicate` flag permanently deletes data - use with caution
 - Snapshot and replication intervals are in milliseconds
 - TempDB volumes are excluded from snapshots and replication by design
+- Context-aware operations require specifying the correct array context
+- Some cmdlets have known issues (e.g., type mismatches) that are being addressed
+
+## Blog Resources
+
+The repository includes blog posts explaining concepts in detail:
+- [Managing Storage with Fusion PowerShell: Storage Tiers](https://www.nocentino.com/posts/2025-09-04-managing-storage-with-fusion-powershell-storage-tiers/)
 
 ## Contributing
 
@@ -129,6 +201,3 @@ Feel free to submit issues or pull requests to improve these examples or add new
 ## License
 
 Please refer to your Pure Storage licensing agreement for usage terms.
-```
-
-This README provides a comprehensive overview of the repository, explains the key concepts, includes usage examples, and helps DBAs understand how to leverage Pure Storage Fusion for their SQL Server environments.This README provides a comprehensive overview of the repository, explains the key concepts, includes usage examples, and helps DBAs understand how to leverage Pure Storage Fusion for their SQL Server environments.

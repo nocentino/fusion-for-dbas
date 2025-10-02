@@ -6,6 +6,8 @@ $ArrayName = 'sn1-x90r2-f06-27.puretec.purestorage.com'
 $Credential = Import-CliXml -Path "$HOME\FA_Cred.xml"
 $FlashArray = Connect-Pfa2Array –EndPoint $ArrayName -Credential $Credential -IgnoreCertificateError -Verbose
 
+# Blog: https://www.nocentino.com/posts/2025-08-14-managing-storage-with-fusion-powershell/
+
 
 # ===============================================
 # DISCOVER AVAILABLE FUSION CMDLETS
@@ -26,6 +28,7 @@ Get-Command -Module PureStoragePowerShellSDK2 -Noun '*Workload*'
 # Get fleet membership - shows all arrays that are part of this Fusion fleet
 # This confirms which arrays we can manage from this connection point
 $FleetInfo = Get-Pfa2FleetMember -Array $FlashArray 
+$RemoteArray = Get-Pfa2RemoteArray -Array $FlashArray -CurrentFleetOnly
 $FleetInfo | Format-List
 $FleetInfo.Member.Name 
 
@@ -110,7 +113,7 @@ New-Pfa2Workload @workloadParams1
 
 # Verify workload creation and list all workloads using this preset, -Filter is also not available for this cmdlet
 Get-Pfa2Workload -Array $FlashArray | 
-    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-List 
+    Where-Object { $_.Preset.Name -eq 'fsa-lab-fleet1:SQL-Server-MultiDisk-Optimized' } | Format-List
 
 
 # ===============================================
@@ -135,6 +138,7 @@ $PGName
 
 # List existing snapshots for the protection group
 # Snapshots are created automatically based on the schedule defined in the preset
+# We might want to consider blocking such operations to prevent overloading the API, or just ask the user to confirm their operation
 Get-Pfa2ProtectionGroupSnapshot -Array $FlashArray -Filter "name='$($PGName.Name)*'"
 
 # ===============================================
